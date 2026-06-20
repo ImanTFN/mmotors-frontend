@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { getVehicles, createVehicle, basculerVehicle, deleteVehicle } from '../../services/vehicleService';
 import { getAllDossiers, updateDossier } from '../../services/dossierService';
+import { getDocuments } from '../../services/dossierService';
 
 const Admin = () => {
   const [vehicles, setVehicles] = useState([]);
   const [dossiers, setDossiers] = useState([]);
+  const [documents, setDocuments] = useState({});
   const [tab, setTab] = useState('vehicles');
   const [form, setForm] = useState({ marque: '', modele: '', annee: '', kilometrage: '', prix: '', motorisation: '', disponible_achat: true, disponible_location: false, prix_location_mois: '' });
   const [message, setMessage] = useState('');
@@ -15,7 +17,19 @@ const Admin = () => {
   }, []);
 
   const loadVehicles = () => getVehicles('').then((res) => setVehicles(res.data));
-  const loadDossiers = () => getAllDossiers().then((res) => setDossiers(res.data));
+
+  const loadDossiers = () => {
+    getAllDossiers().then((res) => {
+      setDossiers(res.data);
+      res.data.forEach((d) => loadDocuments(d.id));
+    });
+  };
+
+  const loadDocuments = (dossierId) => {
+    getDocuments(dossierId).then((res) => {
+      setDocuments((prev) => ({ ...prev, [dossierId]: res.data }));
+    });
+  };
 
   const handleCreateVehicle = async (e) => {
     e.preventDefault();
@@ -101,15 +115,33 @@ const Admin = () => {
       {tab === 'dossiers' && (
         <div>
           {dossiers.map((d) => (
-            <div key={d.id} style={styles.row}>
-              <span>Dossier #{d.id} — {d.type_dossier} — Véhicule #{d.vehicle_id}</span>
-              <span style={styles.badge}>{d.statut}</span>
-              <select style={styles.select} value={d.statut} onChange={(e) => handleUpdateDossier(d.id, e.target.value)}>
-                <option value="en_attente">En attente</option>
-                <option value="en_cours">En cours</option>
-                <option value="valide">Validé</option>
-                <option value="refuse">Refusé</option>
-              </select>
+            <div key={d.id} style={styles.dossierCard}>
+              <div style={styles.dossierHeader}>
+                <span>Dossier #{d.id} — {d.type_dossier} — Véhicule #{d.vehicle_id}</span>
+                <span style={styles.badge}>{d.statut}</span>
+                <select style={styles.select} value={d.statut} onChange={(e) => handleUpdateDossier(d.id, e.target.value)}>
+                  <option value="en_attente">En attente</option>
+                  <option value="en_cours">En cours</option>
+                  <option value="valide">Validé</option>
+                  <option value="refuse">Refusé</option>
+                </select>
+              </div>
+              <div style={styles.docSection}>
+                <p style={styles.docTitle}>📎 Documents déposés</p>
+                {documents[d.id]?.length > 0 ? (
+                  <ul style={styles.docList}>
+                    {documents[d.id].map((doc) => (
+                      <li key={doc.id}>
+                        <a href={doc.url} target="_blank" rel="noopener noreferrer" style={styles.docLink}>
+                          ⬇ {doc.nom_fichier}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={styles.noDoc}>Aucun document déposé pour ce dossier.</p>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -134,6 +166,13 @@ const styles = {
   badge: { color: '#666', fontSize: '0.9rem' },
   select: { padding: '0.25rem', borderRadius: '4px', border: '1px solid #ddd' },
   success: { color: 'green', marginBottom: '1rem' },
+  dossierCard: { background: 'white', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
+  dossierHeader: { display: 'flex', alignItems: 'center', gap: '1rem' },
+  docSection: { marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #eee' },
+  docTitle: { fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.9rem' },
+  docList: { paddingLeft: '1.2rem', margin: 0 },
+  docLink: { color: '#1a1a2e', textDecoration: 'underline' },
+  noDoc: { color: '#999', fontSize: '0.9rem' },
 };
 
 export default Admin;
