@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMesDossiers } from '../../services/dossierService';
+import { getMesDossiers, uploadDocument, getDocuments } from '../../services/dossierService';
 import { useAuth } from '../../context/AuthContext';
 
 const statusColors = {
@@ -20,12 +20,41 @@ const Dashboard = () => {
   const { user } = useAuth();
   const [dossiers, setDossiers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [documents, setDocuments] = useState({});
+  const [uploading, setUploading] = useState(null);
 
   useEffect(() => {
-    getMesDossiers()
-      .then((res) => setDossiers(res.data))
-      .finally(() => setLoading(false));
+    loadDossiers();
   }, []);
+
+  const loadDossiers = () => {
+    getMesDossiers()
+      .then((res) => {
+        setDossiers(res.data);
+        res.data.forEach((d) => loadDocuments(d.id));
+      })
+      .finally(() => setLoading(false));
+  };
+
+  const loadDocuments = (dossierId) => {
+    getDocuments(dossierId).then((res) => {
+      setDocuments((prev) => ({ ...prev, [dossierId]: res.data }));
+    });
+  };
+
+  const handleFileChange = async (dossierId, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(dossierId);
+    try {
+      await uploadDocument(dossierId, file);
+      loadDocuments(dossierId);
+    } catch {
+      alert('Erreur lors de l\'envoi du document');
+    } finally {
+      setUploading(null);
+    }
+  };
 
   if (loading) return <div style={styles.loading}>Chargement...</div>;
 
@@ -48,6 +77,32 @@ const Dashboard = () => {
               <p style={styles.cardInfo}>Véhicule ID : {d.vehicle_id}</p>
               <p style={styles.cardInfo}>Soumis le : {new Date(d.created_at).toLocaleDateString('fr-FR')}</p>
               {d.commentaire && <p style={styles.comment}>💬 {d.commentaire}</p>}
+
+              <div style={styles.docSection}>
+                <p style={styles.docTitle}>📎 Documents du dossier</p>
+                {documents[d.id]?.length > 0 ? (
+                  <ul style={styles.docList}>
+                    {documents[d.id].map((doc) => (
+                      <li key={doc.id}>
+                        <a href={doc.url} target="_blank" rel="noopener noreferrer" style={styles.docLink}>
+                          {doc.nom_fichier}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={styles.noDoc}>Aucun document envoyé.</p>
+                )}
+                <label style={styles.uploadBtn}>
+                  {uploading === d.id ? 'Envoi en cours...' : '+ Ajouter un document'}
+                  <input
+                    type="file"
+                    style={{ display: 'none' }}
+                    onChange={(e) => handleFileChange(d.id, e)}
+                    disabled={uploading === d.id}
+                  />
+                </label>
+              </div>
             </div>
           ))}
         </div>
@@ -69,6 +124,12 @@ const styles = {
   comment: { color: '#333', marginTop: '0.5rem', fontStyle: 'italic' },
   loading: { textAlign: 'center', padding: '4rem' },
   empty: { color: '#666', textAlign: 'center' },
+  docSection: { marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #eee' },
+  docTitle: { fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.9rem' },
+  docList: { marginBottom: '0.75rem', paddingLeft: '1.2rem' },
+  docLink: { color: '#1a1a2e', textDecoration: 'underline' },
+  noDoc: { color: '#999', fontSize: '0.9rem', marginBottom: '0.75rem' },
+  uploadBtn: { display: 'inline-block', padding: '0.5rem 1rem', background: '#e94560', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem' },
 };
 
 export default Dashboard;
